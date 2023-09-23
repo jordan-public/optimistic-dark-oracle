@@ -1,40 +1,44 @@
 program dorcl.aleo;
 
-struct ProposalInfo:
+struct AssertionDetails:
     title as field;
-    content as field;
-    proposer as address;
+    contentHash as field;
+    asserter as address;
+    asserterDeposit as u64;
+    voterFee as u64;
+    disputeDeadlineBlockHeight as u32;
+    votingDeadlineBlockHeight as u32;
 
-record Proposal:
+record Assertion:
     owner as address.private;
     id as field.private;
-    info as ProposalInfo.private;
+    details as AssertionDetails.private;
 
-record Ticket:
+record VotingRight:
     owner as address.private;
-    pid as field.private;
+    assertionId as field.private;
 
 record token:
     owner as address.private;
     amount as u64.private;
 
 
-mapping proposals:
+mapping assertions:
 	key left as field.public;
-	value right as ProposalInfo.public;
+	value right as AssertionDetails.public;
 
 
-mapping tickets:
+mapping disputers:
+	key left as field.public;
+	value right as address.public;
+
+
+mapping confirm_votes:
 	key left as field.public;
 	value right as u64.public;
 
 
-mapping agree_votes:
-	key left as field.public;
-	value right as u64.public;
-
-
-mapping disagree_votes:
+mapping dispute_votes:
 	key left as field.public;
 	value right as u64.public;
 
@@ -43,57 +47,118 @@ mapping account:
 	key left as address.public;
 	value right as u64.public;
 
-function propose:
-    input r0 as ProposalInfo.public;
-    assert.eq self.caller r0.proposer;
-    hash.bhp256 r0.title into r1 as field;
-    cast self.caller r1 r0 into r2 as Proposal.record;
-    output r2 as Proposal.record;
+function createAssertion:
+    input r0 as AssertionDetails.public;
+    assert.eq self.caller r0.asserter;
+    hash.bhp256 r0.contentHash into r1 as field;
+    cast self.caller r1 r0 into r2 as Assertion.record;
+    output r2 as Assertion.record;
 
-    finalize r1;
+    finalize self.caller r0.asserterDeposit r1;
 
-finalize propose:
+finalize createAssertion:
+    input r0 as address.public;
+    input r1 as u64.public;
+    input r2 as field.public;
+    get.or_use account[r0] 0u64 into r3;
+    sub r3 r1 into r4;
+    set r4 into account[r0];
+    set 0u64 into confirm_votes[r2];
+    set 0u64 into dispute_votes[r2];
+
+
+function disputeAssertion:
+    input r0 as u64.private;
+    input r1 as field.private;
+
+    finalize self.caller r0 r1;
+
+finalize disputeAssertion:
+    input r0 as address.public;
+    input r1 as u64.public;
+    input r2 as field.public;
+    get.or_use account[r0] 0u64 into r3;
+    sub r3 r1 into r4;
+    set r4 into account[r0];
+    get assertions[r2] into r5;
+    lte r5.disputeDeadlineBlockHeight block.height into r6;
+    assert.eq r6 true;
+    cast 0u64 into r7 as address;
+    get.or_use disputers[r2] r7 into r8;
+    cast 0u64 into r9 as address;
+    is.eq r8 r9 into r10;
+    assert.eq r10 true;
+    set r0 into disputers[r2];
+
+
+function new_voting_right:
+    input r0 as token.record;
+    input r1 as u64.private;
+    input r2 as field.private;
+    sub r0.amount r1 into r3;
+    cast r0.owner r3 into r4 as token.record;
+    cast r0.owner r2 into r5 as VotingRight.record;
+    output r5 as VotingRight.record;
+    output r4 as token.record;
+
+    finalize r1 r2;
+
+finalize new_voting_right:
+    input r0 as u64.public;
+    input r1 as field.public;
+    get assertions[r1] into r2;
+    assert.eq r0 r2.voterFee;
+
+
+function confirm:
+    input r0 as VotingRight.record;
+
+    finalize r0.assertionId;
+
+finalize confirm:
     input r0 as field.public;
-    set 0u64 into tickets[r0];
+    get assertions[r0] into r1;
+    lte r1.votingDeadlineBlockHeight block.height into r2;
+    assert.eq r2 true;
+    get.or_use confirm_votes[r0] 0u64 into r3;
+    add r3 1u64 into r4;
+    set r4 into confirm_votes[r0];
 
 
-function new_ticket:
+function deny:
+    input r0 as VotingRight.record;
+
+    finalize r0.assertionId;
+
+finalize deny:
     input r0 as field.public;
-    input r1 as address.public;
-    cast r1 r0 into r2 as Ticket.record;
-    output r2 as Ticket.record;
-
-    finalize r0;
-
-finalize new_ticket:
-    input r0 as field.public;
-    get.or_use tickets[r0] 0u64 into r1;
-    add r1 1u64 into r2;
-    set r2 into tickets[r0];
+    get assertions[r0] into r1;
+    lte r1.votingDeadlineBlockHeight block.height into r2;
+    assert.eq r2 true;
+    get.or_use dispute_votes[r0] 0u64 into r3;
+    add r3 1u64 into r4;
+    set r4 into dispute_votes[r0];
 
 
-function agree:
-    input r0 as Ticket.record;
+function burn_public:
+    input r0 as u64.public;
 
-    finalize r0.pid;
+    finalize self.caller r0;
 
-finalize agree:
-    input r0 as field.public;
-    get.or_use agree_votes[r0] 0u64 into r1;
-    add r1 1u64 into r2;
-    set r2 into agree_votes[r0];
+finalize burn_public:
+    input r0 as address.public;
+    input r1 as u64.public;
+    get.or_use account[r0] 0u64 into r2;
+    sub r2 r1 into r3;
+    set r3 into account[r0];
 
 
-function disagree:
-    input r0 as Ticket.record;
-
-    finalize r0.pid;
-
-finalize disagree:
-    input r0 as field.public;
-    get.or_use disagree_votes[r0] 0u64 into r1;
-    add r1 1u64 into r2;
-    set r2 into disagree_votes[r0];
+function burn_private:
+    input r0 as token.record;
+    input r1 as u64.private;
+    sub r0.amount r1 into r2;
+    cast r0.owner r2 into r3 as token.record;
+    output r3 as token.record;
 
 
 function mint_public:
