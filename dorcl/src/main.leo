@@ -1,73 +1,94 @@
 // The 'dorcl' program.
 program dorcl.aleo {
-    // Proposal details
-    struct ProposalInfo {
+    // The following part is built on the pattern of secret voting,
+    // however it is modified to be suitable for UMA-like assertions,
+    // which have deadlines for dispute and dispute resolution.
+
+    // Assertion details
+    struct AssertionDetails {
         title: field,
-        content: field,
-        proposer: address,
+        contentHash: field,
+        asserter: address,
+        asserterDeposit: u64, // assuming disputer deposit is the same
+        voterFee: u64,
+        disputeDeadlineBlockHeight: u32,
+        disputeResolutionDeadlineBlockHeight: u32,
     }
 
     // Proposal record records proposal info publicly
-    record Proposal {
+    record Assertion {
         owner: address,
         id: field,
-        info: ProposalInfo,
+        details: AssertionDetails,
     }
 
-    // Save proposal info in public storage.
-    mapping proposals: field => ProposalInfo;
+    // Save all assertions' info publicly.
+    mapping assertions: field => AssertionDetails; // assertionId => AssertionDetails
 
-    // Privacy tickets to vote
-    record Ticket {
+    // Deposits to vote (private)
+    record VotingRight {
         owner: address,
-        pid: field,
+        assertionId: field,
     }
 
-    // Count the total tickets issued for each proposal
-    mapping tickets: field => u64;
+    mapping disputers: field => address; // assertionId => disputerAddress
 
-    mapping agree_votes: field => u64;
+    mapping confirm_votes: field => u64; // assertionId => confirming votes
 
-    mapping disagree_votes: field => u64;
+    mapping dispute_votes: field => u64; // assertionId => disputing votes
 
     // Propose a new proposal to vote on.
-    transition propose(public info: ProposalInfo) -> Proposal {
-        // Authenticate proposer.
-        assert_eq(self.caller, info.proposer);
+    transition createAssertion(public details: AssertionDetails) -> Assertion {
+        // Authenticate aserter
+        assert_eq(self.caller, details.asserter);
 
         // Generate a new proposal id.
-        let id: field = BHP256::hash_to_field(info.title);
+        let id: field = BHP256::hash_to_field(details.contentHash);
 
-
-        // Return a new record for the proposal.
+        // Return the newly created assertion
         // Finalize the proposal id.
-        return Proposal {
+        return Assertion {
             owner: self.caller,
             id,
-            info,
-        } then finalize(id);
+            details,
+        } then finalize(self.caller, details.asserterDeposit, id);
     }
-    // Create a new proposal in the "tickets" mapping.
-    finalize propose(public id: field) {
-        Mapping::set(tickets, id, 0u64);
+    // Create a new assertionId
+    finalize createAssertion(sender: address, fee: u64, public id: field) {
+        //burn_public(fee);
+        let sender_amount: u64 = Mapping::get_or_use(account, sender, 0u64);
+        Mapping::set(account, sender, sender_amount - fee); // Non wrapping - can fail if underfunded
+        //
+        Mapping::set(confirm_votes, id, 0u64); // no confirmations yet
+        Mapping::set(dispute_votes, id, 0u64); // no disputes yer
     }
 
     // Create a new ticket to vote with.
-    transition new_ticket(
-        public pid: field,
-        public voter: address,
-    ) -> Ticket {
+    transition new_voting_right(
+        sender: token,
+        fee: u64,
+        assertionId: field,
+    ) -> (VotingRight, token) {
+
+        // Pay for the right
+        // burn_private(fee);
+        let difference: u64 = sender.amount - fee;
+        // Produce a token record with the change amount for the sender.
+        let remaining: token = token {
+            owner: sender.owner,
+            amount: difference,
+        };
+        //
 
         // Finalize the proposal id for the ticket.
-        return Ticket {
+        return (VotingRight {
             owner: voter,
-            pid,
-        } then finalize(pid);
+            assertionId,
+        }, remaining) then finalize(fee, assertionId);
     }
-    // Create a new ticket on a proposal in the "tickets" mapping.
-    finalize new_ticket(public pid: field) {
-        let current: u64 = Mapping::get_or_use(tickets, pid, 0u64);
-        Mapping::set(tickets, pid, current + 1u64);
+    finalize new_voting_right(fee: u64, assertionId: field) {
+        let assertionParts: AssertionDetails = Mapping::get(assertions, assertionId);
+        assert_eq(fee, assertionParts.voterFee);
     }
 
     // Vote privately to agree with a proposal.
@@ -102,6 +123,39 @@ program dorcl.aleo {
         owner: address,
         // The token amount.
         amount: u64,
+    }
+
+    // The code below based on the token sample, with token burning added.
+    // The only reason it is inside, is so that the transfer functions
+    // for incentivization and penalties are in the same program.
+
+    /* Burn */
+
+    transition burn_public(public amount: u64) {
+        return then finalize(self.caller, amount);
+    }
+    finalize burn_public(public sender: address, public amount: u64) {
+        // Decrements `account[sender]` by `amount`.
+        // If `account[sender]` does not exist, it will be created.
+        // If `account[sender] - amount` underflows, `transfer_public` is reverted.
+        let sender_amount: u64 = Mapping::get_or_use(account, sender, 0u64);
+        Mapping::set(account, sender, sender_amount - amount);
+    }
+
+    transition burn_private(sender: token, amount: u64) -> (token) {
+        // Checks the given token record has sufficient balance.
+        // This `sub` operation is safe, and the proof will fail if an overflow occurs.
+        // `difference` holds the change amount to be returned to sender.
+        let difference: u64 = sender.amount - amount;
+
+        // Produce a token record with the change amount for the sender.
+        let remaining: token = token {
+            owner: sender.owner,
+            amount: difference,
+        };
+
+        // Output the sender's change record and the receiver's record.
+        return (remaining);
     }
 
     /* Mint */
