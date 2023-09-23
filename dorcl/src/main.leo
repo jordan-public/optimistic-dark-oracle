@@ -12,7 +12,7 @@ program dorcl.aleo {
         asserterDeposit: u64, // assuming disputer deposit is the same
         voterFee: u64,
         disputeDeadlineBlockHeight: u32,
-        disputeResolutionDeadlineBlockHeight: u32,
+        votingDeadlineBlockHeight: u32,
     }
 
     // Proposal record records proposal info publicly
@@ -39,7 +39,7 @@ program dorcl.aleo {
 
     // Propose a new proposal to vote on.
     transition createAssertion(public details: AssertionDetails) -> Assertion {
-        // Authenticate aserter
+        // Authenticate asserter
         assert_eq(self.caller, details.asserter);
 
         // Generate a new proposal id.
@@ -63,6 +63,21 @@ program dorcl.aleo {
         Mapping::set(dispute_votes, id, 0u64); // no disputes yer
     }
 
+    transition disputeAssertion(fee: u64, assertionId: field) {
+        return then finalize(self.caller, fee, assertionId);
+    }
+    finalize disputeAssertion(sender: address, fee: u64, assertionId: field) {
+        //burn_public(fee);
+        let sender_amount: u64 = Mapping::get_or_use(account, sender, 0u64);
+        Mapping::set(account, sender, sender_amount - fee); // Non wrapping - can fail if underfunded
+        //
+        let assertionParts: AssertionDetails = Mapping::get(assertions, assertionId);
+        assert(assertionParts.disputeDeadlineBlockHeight <= block.height);
+        let d: address = Mapping::get_or_use(disputers, assertionId, 0u64 as address);
+        assert(d == 0u64 as address);
+        Mapping::set(disputers, assertionId, sender);
+    }
+
     // Create a new ticket to vote with.
     transition new_voting_right(
         sender: token,
@@ -82,7 +97,7 @@ program dorcl.aleo {
 
         // Finalize the proposal id for the ticket.
         return (VotingRight {
-            owner: voter,
+            owner: sender.owner,
             assertionId,
         }, remaining) then finalize(fee, assertionId);
     }
@@ -92,26 +107,34 @@ program dorcl.aleo {
     }
 
     // Vote privately to agree with a proposal.
-    transition agree(ticket: Ticket) {
+    transition confirm(v: VotingRight) {
         // Finalize this vote.
-        return then finalize(ticket.pid);
+        return then finalize(v.assertionId);
     }
-    finalize agree(public pid: field) {
+    finalize confirm(assertionId: field) {
+        let assertionParts: AssertionDetails = Mapping::get(assertions, assertionId);
+        assert(assertionParts.votingDeadlineBlockHeight <= block.height);
         // Publicly increment the number of agree votes.
-        let current: u64 = Mapping::get_or_use(agree_votes, pid, 0u64);
-        Mapping::set(agree_votes, pid, current + 1u64);
+        let current: u64 = Mapping::get_or_use(confirm_votes, assertionId, 0u64);
+        Mapping::set(confirm_votes, assertionId, current + 1u64);
     }
 
     // Vote privately to disagree with a proposal.
-    transition disagree(ticket: Ticket) {
+    transition deny(v: VotingRight) {
         // Finalize this vote.
-        return then finalize(ticket.pid);
+        return then finalize(v.assertionId);
     }
-    finalize disagree(pid: field) {
+    finalize deny(assertionId: field) {
+        let assertionParts: AssertionDetails = Mapping::get(assertions, assertionId);
+        assert(assertionParts.votingDeadlineBlockHeight <= block.height);
         // Publicly increment the number of disagree votes.
-        let current: u64 = Mapping::get_or_use(disagree_votes, pid, 0u64);
-        Mapping::set(disagree_votes, pid, current + 1u64);
+        let current: u64 = Mapping::get_or_use(dispute_votes, assertionId, 0u64);
+        Mapping::set(dispute_votes, assertionId, current + 1u64);
     }
+
+    // transition collectAward(assertionId: field) {
+
+    // }
 
 // Token
     // On-chain storage of an `account` map, with `address` as the key,
