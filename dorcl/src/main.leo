@@ -31,6 +31,13 @@ program dorcl.aleo {
         assertionId: field,
     }
 
+    // For reward distribution
+    record VotingReceipt {
+        owner: address,
+        assertionId: field,
+        outcome: bool,
+    }
+
     mapping disputers: field => address; // assertionId => disputerAddress
 
     mapping confirm_votes: field => u64; // assertionId => confirming votes
@@ -107,9 +114,9 @@ program dorcl.aleo {
     }
 
     // Vote privately to agree with a proposal.
-    transition confirm(v: VotingRight) {
-        // Finalize this vote.
-        return then finalize(v.assertionId);
+    transition confirm(v: VotingRight) -> VotingReceipt {
+        // Finalize this vote
+        return VotingReceipt { owner: self.caller, assertionId: v.assertionId, outcome: true } then finalize(v.assertionId);
     }
     finalize confirm(assertionId: field) {
         let assertionParts: AssertionDetails = Mapping::get(assertions, assertionId);
@@ -120,9 +127,9 @@ program dorcl.aleo {
     }
 
     // Vote privately to disagree with a proposal.
-    transition deny(v: VotingRight) {
+    transition deny(v: VotingRight) -> VotingReceipt {
         // Finalize this vote.
-        return then finalize(v.assertionId);
+        return VotingReceipt { owner: self.caller, assertionId: v.assertionId, outcome: false } then finalize(v.assertionId);
     }
     finalize deny(assertionId: field) {
         let assertionParts: AssertionDetails = Mapping::get(assertions, assertionId);
@@ -132,9 +139,21 @@ program dorcl.aleo {
         Mapping::set(dispute_votes, assertionId, current + 1u64);
     }
 
-    // transition collectAward(assertionId: field) {
-
-    // }
+    transition collectVotingAward(award: u64, r: VotingReceipt) -> token {
+        assert(self.caller == r.owner);
+        return token {
+                owner: self.caller,
+                amount: award,
+            } then finalize(award, r.assertionId, r.outcome);
+    }
+    finalize collectVotingAward(award: u64, assertionId: field, outcome: bool) {
+        let assertionParts: AssertionDetails = Mapping::get(assertions, assertionId);
+        assert(assertionParts.votingDeadlineBlockHeight > block.height);
+        let y: u64 = Mapping::get_or_use(confirm_votes, assertionId, 0u64);
+        let n: u64 = Mapping::get_or_use(dispute_votes, assertionId, 0u64);
+        assert(outcome ? y > n : y <=n); // Otherwise revert
+        assert(award == assertionParts.voterFee);
+    }
 
 // Token
     // On-chain storage of an `account` map, with `address` as the key,
