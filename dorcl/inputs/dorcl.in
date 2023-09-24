@@ -1,4 +1,16 @@
 // The program input for dorcl/src/main.leo
-[main]
-public a: u32 = 1u32;
-b: u32 = 2u32;
+[createAssertion]
+details: AssertionDetails = AssertionDetails {
+    title:  0field,
+    contentHash: 0field,
+    asserter: aleo18jtgsuuu3rluye2tnevugl662nzhw7pw8tcmfrvss25mw36apvrsu97lyx,
+    asserterDeposit: 10u64,
+    voterFee: 1u64,
+    disputeDeadlineBlockHeight: 0u32,
+    votingDeadlineBlockHeight: 1000u32,
+};
+
+[disputeAssertion]
+fee: u64 = 10u64;
+assertionId: field = 6483909679030553276222748262902265455236698137743464346806854780005049792424field;
+
