@@ -18,6 +18,11 @@ record VotingRight:
     owner as address.private;
     assertionId as field.private;
 
+record VotingReceipt:
+    owner as address.private;
+    assertionId as field.private;
+    outcome as boolean.private;
+
 record token:
     owner as address.private;
     amount as u64.private;
@@ -112,6 +117,8 @@ finalize new_voting_right:
 
 function confirm:
     input r0 as VotingRight.record;
+    cast self.caller r0.assertionId true into r1 as VotingReceipt.record;
+    output r1 as VotingReceipt.record;
 
     finalize r0.assertionId;
 
@@ -127,6 +134,8 @@ finalize confirm:
 
 function deny:
     input r0 as VotingRight.record;
+    cast self.caller r0.assertionId false into r1 as VotingReceipt.record;
+    output r1 as VotingReceipt.record;
 
     finalize r0.assertionId;
 
@@ -138,6 +147,33 @@ finalize deny:
     get.or_use dispute_votes[r0] 0u64 into r3;
     add r3 1u64 into r4;
     set r4 into dispute_votes[r0];
+
+
+function collectVotingAward:
+    input r0 as u64.private;
+    input r1 as VotingReceipt.record;
+    is.eq self.caller r1.owner into r2;
+    assert.eq r2 true;
+    cast self.caller r0 into r3 as token.record;
+    output r3 as token.record;
+
+    finalize r0 r1.assertionId r1.outcome;
+
+finalize collectVotingAward:
+    input r0 as u64.public;
+    input r1 as field.public;
+    input r2 as boolean.public;
+    get assertions[r1] into r3;
+    gt r3.votingDeadlineBlockHeight block.height into r4;
+    assert.eq r4 true;
+    get.or_use confirm_votes[r1] 0u64 into r5;
+    get.or_use dispute_votes[r1] 0u64 into r6;
+    gt r5 r6 into r7;
+    lte r5 r6 into r8;
+    ternary r2 r7 r8 into r9;
+    assert.eq r9 true;
+    is.eq r0 r3.voterFee into r10;
+    assert.eq r10 true;
 
 
 function burn_public:
