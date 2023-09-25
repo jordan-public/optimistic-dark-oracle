@@ -1,4 +1,12 @@
-# optimistic-dark-oracle
+[This project](https://ethglobal.com/showcase/dark-opt-oracle-d0yg7) won the following prizes at the [ETHGlobal New York 2023](https://ethglobal.com/events/newyork2023) hackathon:
+
+🥇 [Aleo — Best Use of Leo](https://ethglobal.com/showcase/dark-opt-oracle-d0yg7)
+
+🥇 [1inch — Open Track](https://ethglobal.com/showcase/dark-opt-oracle-d0yg7)
+
+🏊‍♂️ [UMA — Pool Prize](https://ethglobal.com/showcase/dark-opt-oracle-d0yg7)
+
+# Optimistic Dark Oracle
 Optimistic Oracle with Zero Knowledge Voting
 
 ## Demo
