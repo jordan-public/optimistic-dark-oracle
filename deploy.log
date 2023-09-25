@@ -1,0 +1,11 @@
+jordan@p21 dorclethglobal % leo build
+       Leo ⚠️  Attention - This command is deprecated. Use the 'run' command.
+
+       Leo ✅ Compiled 'main.leo' into Aleo instructions
+jordan@p21 dorclethglobal % ./deploy.sh      
+
+📦 Creating deployment transaction for 'dorclethglobal.aleo'...
+
+✅ Created deployment transaction for 'dorclethglobal.aleo'
+✅ Successfully broadcast deployment at1pwsechj3ch63mydseg86vmngjpu68t5eyrwsd59mr4n55kwuwszsm7rnp4 ('dorclethglobal.aleo') to https://vm.aleo.org/api/testnet3/transaction/broadcast.
+at1pwsechj3ch63mydseg86vmngjpu68t5eyrwsd59mr4n55kwuwszsm7rnp4
