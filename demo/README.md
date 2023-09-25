@@ -13,6 +13,11 @@ The code can be run on-chain after deploying using the following command from th
 
 However, to prepare the script proper address, private key and record has to be entered correctly in ```deploy.sh```, as instructed in the Aleo samples.
 
+In order to save money (even though testnet money), as shorter program names cost more, the program was renamed from "dorcl" to "dorclethglobal" and deployed on Aleo Testnet3 at the following address. See the [deployent log](../deploy.log) for details:
+```
+at1pwsechj3ch63mydseg86vmngjpu68t5eyrwsd59mr4n55kwuwszsm7rnp4
+```
+
 ## Local execution
 
 Each function call has to contain proper parameters entered in ```inputs/dorcl.in```. The output from one command contains values which have to be copied in the input for the next command. For example, with parameters:
